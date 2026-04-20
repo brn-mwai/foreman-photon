@@ -1,4 +1,4 @@
-import { PROJECTS, bySlug } from "./projects.ts";
+import { loadProjects, bySlug } from "./projects.ts";
 import { readNotes, markDone } from "./storage.ts";
 import { buildStandup } from "./standup.ts";
 
@@ -26,14 +26,14 @@ export async function tryCommand(raw: string): Promise<CommandReply> {
 
   if (/^list$/.test(lower)) {
     return {
-      text: PROJECTS.map((p) => `${p.slug.padEnd(10)} ${p.name}`).join("\n"),
+      text: loadProjects().map((p) => `${p.slug.padEnd(10)} ${p.name}`).join("\n"),
       handled: true,
     };
   }
 
   if (/^blockers$/.test(lower)) {
     const all: string[] = [];
-    for (const p of PROJECTS) {
+    for (const p of loadProjects()) {
       const notes = await readNotes(p.slug, 500);
       const blockers = notes.filter((n) => n.kind === "blocker" && !n.done);
       for (const b of blockers) all.push(`[${p.slug}] ${b.text} · ${b.id}`);
@@ -44,7 +44,7 @@ export async function tryCommand(raw: string): Promise<CommandReply> {
   const todosMatch = lower.match(/^todos(?:\s+(\w+))?$/);
   if (todosMatch) {
     const slug = todosMatch[1];
-    const targets = slug ? [bySlug(slug)].filter(Boolean) : PROJECTS;
+    const targets = slug ? [bySlug(slug)].filter(Boolean) : loadProjects();
     if (slug && targets.length === 0) {
       return { text: `unknown project: ${slug}`, handled: true };
     }
@@ -63,7 +63,7 @@ export async function tryCommand(raw: string): Promise<CommandReply> {
   const doneMatch = lower.match(/^done\s+([a-z0-9]+)$/);
   if (doneMatch) {
     const id = doneMatch[1];
-    for (const p of PROJECTS) {
+    for (const p of loadProjects()) {
       if (await markDone(p.slug, id)) {
         return { text: `✓ done [${p.slug}] ${id}`, handled: true };
       }

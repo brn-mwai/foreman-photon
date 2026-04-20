@@ -2,7 +2,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
-import { PROJECTS, type Project } from "./projects.ts";
+import { loadProjects, type Project } from "./projects.ts";
 import { readNotes, lastActivity } from "./storage.ts";
 
 const execFileP = promisify(execFile);
@@ -50,7 +50,7 @@ async function projectStatus(p: Project): Promise<{
 
 export async function buildStandup(): Promise<string> {
   const staleDays = Number(process.env.STALE_DAYS || "3");
-  const active = PROJECTS.filter((p) => p.slug !== "inbox");
+  const active = loadProjects().filter((p) => p.slug !== "inbox");
   const statuses = await Promise.all(active.map(projectStatus));
 
   const movers = statuses.filter((s) => s.commits.length > 0 || s.openTodos.length > 0);

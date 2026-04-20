@@ -1,5 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
-import { PROJECTS, bySlug, keywordMatch, type Project } from "./projects.ts";
+import { loadProjects, bySlug, keywordMatch, type Project } from "./projects.ts";
 import type { NoteKind } from "./storage.ts";
 
 export type Routed = {
@@ -9,17 +9,21 @@ export type Routed = {
   confidence: number;
 };
 
-const SYSTEM = `You are Foreman's router. Given a short iMessage from the founder, return JSON:
+function buildSystemPrompt(): string {
+  return `You are Foreman's router. Given a short iMessage from the user, return JSON:
 { "slug": "<project slug>", "kind": "note|todo|blocker|decision|idea", "summary": "<<=120 chars>", "confidence": 0..1 }
 
 Project slugs:
-${PROJECTS.map((p) => `- ${p.slug}: ${p.oneLine}`).join("\n")}
+${loadProjects()
+  .map((p) => `- ${p.slug}: ${p.oneLine}`)
+  .join("\n")}
 
 Rules:
 - Pick the MOST specific project. Use "inbox" only if truly unrelated.
 - "todo" if action to do. "blocker" if stuck. "decision" if a choice made. "idea" if brainstorm. "note" otherwise.
 - summary = one-line paraphrase, keep original intent.
 - Output ONLY the JSON object, no prose.`;
+}
 
 let client: GoogleGenAI | null = null;
 
@@ -39,7 +43,7 @@ export async function route(text: string): Promise<Routed> {
     const model = process.env.GEMINI_MODEL || "gemini-2.5-flash-preview-05-20";
     const res = await getClient().models.generateContent({
       model,
-      contents: [{ role: "user", parts: [{ text: `${SYSTEM}\n\nMessage: ${text}` }] }],
+      contents: [{ role: "user", parts: [{ text: `${buildSystemPrompt()}\n\nMessage: ${text}` }] }],
       config: { responseMimeType: "application/json", temperature: 0 },
     });
     const raw = res.text ?? "{}";

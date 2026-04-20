@@ -2,7 +2,7 @@
 
 > Text your thoughts. Foreman files them to the right project and tells you what's slipping.
 
-An iMessage-native operations agent for founders juggling many projects. No UI, no dashboard — just text your phone like you text a friend.
+An iMessage-native operations agent for anyone juggling many projects. No UI, no dashboard — just text your phone like you text a friend.
 
 Built on [`@photon-ai/imessage-kit`](https://github.com/photon-hq/imessage-kit) (macOS iMessage SDK) and Google Gemini for intent classification.
 
@@ -12,7 +12,7 @@ Built on [`@photon-ai/imessage-kit`](https://github.com/photon-hq/imessage-kit) 
 
 ## Why this exists
 
-If you ship across five repos, three pitch decks, and a competition at once, the bottleneck is not execution — it is *context reassembly*. Every morning you re-load: who needs what, what's stale, what did I decide on Tuesday about X.
+If you ship across multiple repos, decks, and side-bets at once, the bottleneck is not execution — it is *context reassembly*. Every morning you re-load: who needs what, what's stale, what did I decide on Tuesday about X.
 
 Foreman is a conversation-native stand-in for that ritual. Every thought you fire at it becomes a structured note in the right project's log. Every morning it fires back a digest of commits, blockers, and stalled projects.
 
@@ -62,7 +62,7 @@ One sentence: **"Text it anything; it files the note, nudges the stale ones, and
 3. **Parse.** `commands.ts` checks a fixed grammar: `standup`, `todos`, `blockers`, `done <id>`, `list`, `help`. Hit → handled and replied.
 4. **Route.** Miss → Gemini classifies `{slug, kind, summary, confidence}`. Keyword fallback if LLM fails.
 5. **Persist.** Append a `Note` to `~/.foreman/projects/<slug>/notes.jsonl`.
-6. **Reply.** `→ AXI Mobility [todo] · id=abc123`.
+6. **Reply.** `→ <Project> [kind] · <id>`.
 
 ### Morning standup flow
 
@@ -88,14 +88,14 @@ One sentence: **"Text it anything; it files the note, nudges the stale ones, and
 
 ## Ontology
 
-Modelled against BFO (ISO/IEC 21838) so the schema stays portable and the agent has a stable world model. See `Claude_brain/domains/ai-ml/agents/bfo-ontology-fundamentals.md`.
+Modelled against the [Basic Formal Ontology](https://basic-formal-ontology.org/) (BFO, ISO/IEC 21838) so the schema stays portable and the agent has a stable world model.
 
 ### Entity → BFO category → storage shape
 
 | Foreman entity       | BFO category                               | Storage                                                   |
 | -------------------- | ------------------------------------------ | --------------------------------------------------------- |
-| `Project`            | Independent continuant (object aggregate)  | `PROJECTS[]` registry in `projects.ts`                    |
-| `Owner`              | Independent continuant (object) + Role     | `OWNER_HANDLE` env var (role = founder, externally held)  |
+| `Project`            | Independent continuant (object aggregate)  | `loadProjects()` from `projects.json` or defaults         |
+| `Owner`              | Independent continuant (object) + Role     | `OWNER_HANDLE` env var (role = user, externally conferred) |
 | `Chat`               | Site (immaterial container)                | `msg.chatId` from SDK                                     |
 | `Note`               | Generically Dependent Continuant (info)    | JSONL row: `{id, ts, kind, text, done, source}`           |
 | `Note.kind`          | GDC subtype marker                         | enum: `note \| todo \| blocker \| decision \| idea`       |
@@ -112,32 +112,56 @@ Foreman keeps the two cleanly split:
 - **Continuants** (things that persist): `Project`, `Owner`, `Chat`. Live in the registry / env.
 - **Occurrents** (events in time): every `Note` append, every routing call, every `send`. Live append-only in JSONL, never mutated (except `done` toggle — see below).
 
-The one compromise: marking a todo `done` mutates a Note in place. Pragmatic, not principled — future versions should log a `Completion` occurrent instead of mutating the GDC.
+The one compromise: marking a todo `done` mutates a `Note` in place. Pragmatic, not principled — future versions should log a `Completion` occurrent instead of mutating the GDC.
 
 ### Directory layout (file-system is the database)
 
 ```
 ~/.foreman/
-├─ projects/
-│  ├─ axi/
-│  │  └─ notes.jsonl          ← append-only log of GDCs for AXI
-│  ├─ wispy/
-│  │  └─ notes.jsonl
-│  ├─ revlog/
-│  │  └─ notes.jsonl
-│  ├─ tollgate/
-│  │  └─ notes.jsonl
-│  ├─ kusini/
-│  │  └─ notes.jsonl
-│  ├─ ktp/
-│  │  └─ notes.jsonl
-│  ├─ paramgolf/
-│  │  └─ notes.jsonl
-│  └─ inbox/
-│     └─ notes.jsonl          ← fallback bucket
+├─ projects.json                 ← your project registry (optional; defaults if absent)
+└─ projects/
+   ├─ <slug>/
+   │  └─ notes.jsonl             ← append-only log of GDCs for this project
+   └─ inbox/
+      └─ notes.jsonl             ← fallback bucket for unrouted notes
 ```
 
 No SQL, no ORM, no migration dance. Append a line, grep a file. If the shape of a `Note` changes, old rows parse as a strict subset — forward-compatible.
+
+---
+
+## Configuring your projects
+
+On first run, Foreman uses a minimal default registry (`work`, `personal`, `inbox`). To customise, drop a `projects.json` at `$FOREMAN_HOME/projects.json` (defaults to `~/.foreman/projects.json`). A sample is in `projects.example.json`:
+
+```json
+[
+  {
+    "slug": "work",
+    "name": "Work",
+    "aliases": ["work", "job", "office"],
+    "repoPath": "~/code/my-work-repo",
+    "oneLine": "Day job — main product repo."
+  },
+  {
+    "slug": "side",
+    "name": "Side Project",
+    "aliases": ["side", "weekend", "hobby"],
+    "repoPath": "~/code/side-project",
+    "oneLine": "Evening side build."
+  }
+]
+```
+
+| Field      | Purpose                                                               |
+| ---------- | --------------------------------------------------------------------- |
+| `slug`     | Short id; also the folder name under `projects/`.                     |
+| `name`     | Display name echoed back in replies.                                  |
+| `aliases`  | Keywords the fallback router matches on; also fed to Gemini as hints. |
+| `repoPath` | Optional git repo — enables commit counts in the standup.             |
+| `oneLine`  | One-line description given to Gemini for routing decisions.           |
+
+An `inbox` project is auto-appended if you don't define one.
 
 ---
 
@@ -160,9 +184,9 @@ All commands are whole-message matches (case-insensitive), keeping parse cost O(
 Confirmation messages compress to one line so you can scroll a thread and grok state:
 
 ```
-→ Wispy [todo] · kf2p9a
-→ AXI Mobility [blocker] ? · kf2p9b     # `?` = low confidence, verify
-→ inbox · kf2p9c                         # kind=note, no decoration
+→ Work [todo] · kf2p9a
+→ Side Project [blocker] ? · kf2p9b     # `?` = low confidence, verify
+→ Inbox · kf2p9c                         # kind=note, no decoration
 ```
 
 ---
@@ -200,11 +224,15 @@ Required so `imessage-kit` can read `~/Library/Messages/chat.db`.
 ### 3. Install + configure
 
 ```bash
-git clone <your-fork>/foreman
-cd foreman
+git clone https://github.com/brn-mwai/foreman-photon.git
+cd foreman-photon
 bun install
 cp .env.example .env
 # edit .env: set OWNER_HANDLE and GEMINI_API_KEY
+
+# optional: customise your projects
+mkdir -p ~/.foreman
+cp projects.example.json ~/.foreman/projects.json
 ```
 
 ### 4. Run
@@ -238,18 +266,19 @@ Write a `launchd` plist at `~/Library/LaunchAgents/cc.foreman.agent.plist` point
 ## File layout
 
 ```
-foreman/
+foreman-photon/
 ├─ package.json
 ├─ tsconfig.json
 ├─ .env.example
-├─ src/
-│  ├─ index.ts        · entry: watcher + owner gate + standup scheduler
-│  ├─ commands.ts     · fixed grammar parser
-│  ├─ router.ts       · Gemini JSON classifier + keyword fallback
-│  ├─ projects.ts     · the 7 active projects + alias table
-│  ├─ storage.ts      · JSONL append/read + markDone + staleness probe
-│  └─ standup.ts      · git log + notes rollup → digest string
-└─ README.md
+├─ projects.example.json    · sample registry — copy to ~/.foreman/projects.json
+├─ README.md
+└─ src/
+   ├─ index.ts              · entry: watcher + owner gate + standup scheduler
+   ├─ commands.ts           · fixed grammar parser
+   ├─ router.ts             · Gemini JSON classifier + keyword fallback
+   ├─ projects.ts           · project registry loader (config-driven)
+   ├─ storage.ts            · JSONL append/read + markDone + staleness probe
+   └─ standup.ts            · git log + notes rollup → digest string
 ```
 
 ---
@@ -269,7 +298,7 @@ foreman/
 Some easy next moves:
 
 1. **Email digests.** Swap `sdk.send` for an SMTP step when you want the standup in inbox.
-2. **Per-project repo hooks.** Add `repoPath` to every project in `projects.ts` and you get commit-aware digests for free.
+2. **Per-project repo hooks.** Add `repoPath` to every project in your `projects.json` and you get commit-aware digests for free.
 3. **Tapback reactions as ack.** Upgrade to [Advanced iMessage Kit](https://github.com/photon-hq/advanced-imessage-kit) to confirm filings with a tapback instead of a reply.
 4. **Weekly rollup.** A second scheduler at `FRIDAY 17:00` that calls Gemini on the week's notes per project and writes a Markdown summary.
 

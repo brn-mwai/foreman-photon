@@ -1,0 +1,28 @@
+[
+  {
+    "slug": "work",
+    "name": "Work",
+    "aliases": ["work", "job", "office"],
+    "repoPath": "~/code/my-work-repo",
+    "oneLine": "Day job — main product repo."
+  },
+  {
+    "slug": "side",
+    "name": "Side Project",
+    "aliases": ["side", "weekend", "hobby"],
+    "repoPath": "~/code/side-project",
+    "oneLine": "Evening side build."
+  },
+  {
+    "slug": "reading",
+    "name": "Reading & Ideas",
+    "aliases": ["read", "idea", "ideas", "book"],
+    "oneLine": "Articles, book notes, half-formed ideas."
+  },
+  {
+    "slug": "inbox",
+    "name": "Inbox",
+    "aliases": ["inbox", "misc", "random"],
+    "oneLine": "Unrouted / general notes."
+  }
+]
