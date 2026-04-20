@@ -1,0 +1,19 @@
+{
+  "name": "foreman",
+  "version": "0.1.0",
+  "description": "iMessage-native ops agent. Text your thoughts, Foreman files them to the right project and tells you what's slipping.",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "bun run src/index.ts",
+    "standup": "bun run src/standup.ts --once",
+    "dev": "bun run --watch src/index.ts"
+  },
+  "dependencies": {
+    "@photon-ai/imessage-kit": "^1.0.0",
+    "@google/genai": "^0.3.0"
+  },
+  "engines": {
+    "bun": ">=1.1.0"
+  }
+}
